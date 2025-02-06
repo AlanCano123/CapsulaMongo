@@ -1,0 +1,46 @@
+{
+	"info": {
+		"_postman_id": "b3bd54af-961b-456a-8fb6-57d884203d71",
+		"name": "Capsula Endpoints",
+		"schema": "https://schema.getpostman.com/json/collection/v2.0.0/collection.json",
+		"_exporter_id": "10972716"
+	},
+	"item": [
+		{
+			"name": "Registrar Incidente",
+			"request": {
+				"method": "POST",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "{\r\n    \"nombreRuta\": \"Ruta1\",\r\n    \"kilometro\": 63,\r\n    \"nombreTipoIncidente\": \"Bache\",\r\n    \"comentarios\": \"Colisión múltiple en la ruta\"\r\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": "localhost:8080/incidentes/registrar"
+			},
+			"response": []
+		},
+		{
+			"name": "Buscar Incidentes",
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": "localhost:8080/incidentes/buscar/Ruta1/0"
+			},
+			"response": []
+		},
+		{
+			"name": "Pedir Reporte",
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": "localhost:8080/incidentes/reporte/Ruta1"
+			},
+			"response": []
+		}
+	]
+}

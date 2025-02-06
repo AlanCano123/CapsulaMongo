@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Gestión de Incidentes</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100 p-6">
+<div class="max-w-4xl mx-auto">
+  <h1 class="text-3xl font-bold text-center mb-6 text-blue-600">Gestión de Incidentes</h1>
+
+  <!-- Registrar Incidente -->
+  <div class="bg-white p-6 rounded-lg shadow-lg mt-6">
+    <h2 class="text-xl font-semibold mb-4 text-gray-700">Registrar Incidente</h2>
+    <form id="incidenteForm" class="bg-white p-6 rounded-lg shadow-lg mt-6">
+      <label>Ruta:</label>
+      <select id="ruta" class="w-full p-2 border rounded" required>
+        <option value="Ruta1">Ruta 1</option>
+        <option value="Ruta2">Ruta 2</option>
+        <option value="Ruta3">Ruta 3</option>
+        <option value="Ruta4">Ruta 4</option>
+        <option value="Ruta5">Ruta 5</option>
+      </select>
+      <label>Kilómetro:</label>
+      <input type="number" id="kilometro" class="w-full p-2 border rounded" required>
+      <label>Tipo de Incidente:</label>
+      <select id="tipoIncidente" class="w-full p-2 border rounded" required>
+        <option value="Fotomulta">Fotomulta</option>
+        <option value="ControlPolicial">Control Policial</option>
+        <option value="Accidente">Accidente</option>
+        <option value="Bache">Bache</option>
+        <option value="Incendio">Incendio</option>
+        <option value="Neblina">Neblina</option>
+        <option value="Animales">Animales</option>
+        <option value="Piquete">Piquete</option>
+      </select>
+      <label>Comentarios:</label>
+      <input type="text" id="comentarios" class="w-full p-2 border rounded" required>
+      <button type="button" onclick="registrarIncidente()" class="w-full bg-red-600 text-white py-2 mt-3 rounded hover:bg-red-700">Registrar</button>
+    </form>
+  </div>
+</div>
+
+  <!-- Listar Todos los Incidentes -->
+  <div class="bg-white p-6 rounded-lg shadow-lg mb-6">
+    <h2 class="text-xl font-semibold mb-4 text-gray-700">Listar Todos los Incidentes</h2>
+    <button onclick="obtenerTodosIncidentes()" class="w-full bg-blue-600 text-white py-2 rounded hover:bg-blue-700">
+      Listar Todos
+    </button>
+    <div id="listaIncidentes" class="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4"></div>
+  </div>
+
+  <!-- Reporte de Incidentes -->
+  <div class="bg-white p-6 rounded-lg shadow-lg">
+    <h2 class="text-xl font-semibold mb-4 text-gray-700">Reporte de Incidentes</h2>
+    <select id="reporteRuta" class="w-full p-2 border rounded">
+      <option value="Ruta1">Ruta 1</option>
+      <option value="Ruta2">Ruta 2</option>
+      <option value="Ruta3">Ruta 3</option>
+      <option value="Ruta4">Ruta 4</option>
+      <option value="Ruta5">Ruta 5</option>
+    </select>
+    <button onclick="obtenerReporte()" class="w-full bg-purple-600 text-white py-2 mt-3 rounded hover:bg-purple-700">
+      Obtener Reporte
+    </button>
+    <div id="resultadoReporte" class="mt-4"></div>
+  </div>
+
+  <!-- Buscar Incidentes -->
+  <div class="bg-white p-6 rounded-lg shadow-lg mt-6">
+    <h2 class="text-xl font-semibold mb-4 text-gray-700">Buscar Incidentes</h2>
+    <select id="buscarRuta" class="w-full p-2 border rounded">
+      <option value="Ruta1">Ruta 1</option>
+      <option value="Ruta2">Ruta 2</option>
+      <option value="Ruta3">Ruta 3</option>
+      <option value="Ruta4">Ruta 4</option>
+      <option value="Ruta5">Ruta 5</option>
+    </select>
+    <input type="number" id="buscarKilometro" placeholder="Kilómetro Inicio" class="w-full p-2 border rounded mt-2">
+    <button onclick="buscarIncidentes()" class="w-full bg-green-600 text-white py-2 mt-3 rounded hover:bg-green-700">
+      Buscar
+    </button>
+    <div id="resultadoIncidentes" class="mt-4"></div>
+  </div>
+</div>
+
+<script>
+  const API_URL = "http://localhost:8080/incidentes";
+
+  function mostrarIncidentes(lista, containerId) {
+    let html = lista.map(item => `
+      <div class="border p-4 rounded-lg shadow bg-gray-50">
+        <p class="text-lg font-semibold text-blue-600">${item.tipoIncidente.nombre || "Incidente"}</p>
+        <p class="text-sm text-gray-700"><strong>Kilómetro:</strong> ${item.kilometro}</p>
+        <p class="text-sm text-gray-700"><strong>Importancia:</strong> ${item.tipoIncidente.importancia}</p>
+        <p class="text-sm text-gray-700"><strong>Comentarios:</strong> ${item.comentarios}</p>
+        <p class="text-xs text-gray-500 mt-2"><strong>Fecha:</strong> ${item.timestamp}</p>
+        <button onclick="eliminarIncidente('${item.id}')" class="mt-2 bg-red-600 text-white py-1 px-4 rounded hover:bg-red-700">Eliminar</button>
+      </div>
+    `).join("");
+    document.getElementById(containerId).innerHTML = html;
+  }
+
+  async function eliminarIncidente(incidenteId) {
+    if (confirm("¿Estás seguro de que deseas eliminar este incidente?")) {
+      try {
+        const response = await fetch(`${API_URL}/eliminar/${incidenteId}`, {
+          method: 'DELETE'
+        });
+
+        if (response.ok) {
+          alert("Incidente eliminado exitosamente.");
+          obtenerTodosIncidentes(); // Refrescar la lista
+        } else {
+          alert("Error al eliminar el incidente.");
+        }
+      } catch (error) {
+        console.error("Error:", error);
+        alert("Error en la comunicación con el servidor.");
+      }
+    }
+  }
+
+  async function obtenerTodosIncidentes() {
+    try {
+      const response = await fetch(`${API_URL}/obtenerTodosAccidentes`);
+      const data = await response.json();
+      mostrarIncidentes(data, "listaIncidentes");
+    } catch (error) {
+      console.error("Error:", error);
+    }
+  }
+
+  async function obtenerReporte() {
+    const nombreRuta = document.getElementById("reporteRuta").value;
+    try {
+      const response = await fetch(`${API_URL}/reporte/${nombreRuta}`);
+      const data = await response.json();
+      mostrarReporte(data);
+    } catch (error) {
+      console.error("Error:", error);
+    }
+  }
+
+  async function buscarIncidentes() {
+    const nombreRuta = document.getElementById("buscarRuta").value;
+    const kilometroInicio = document.getElementById("buscarKilometro").value;
+    try {
+      const response = await fetch(`${API_URL}/buscar/${nombreRuta}/${kilometroInicio}`);
+      const data = await response.json();
+      mostrarBusqueda(data);
+    } catch (error) {
+      console.error("Error:", error);
+    }
+  }
+  function mostrarBusqueda(datos) {
+    let incidentesHtml = "";
+    let interseccionesHtml = "";
+
+    // Verificar si hay incidentes y mostrarlos
+    if (Array.isArray(datos.incidentes) && datos.incidentes.length > 0) {
+      incidentesHtml = datos.incidentes.map(item => `
+            <div class="border p-4 rounded-lg shadow bg-gray-50">
+                <p class="text-lg font-semibold text-blue-600">${item.tipoIncidente?.nombre || "Incidente"}</p>
+                <p class="text-sm text-gray-700"><strong>Kilómetro:</strong> ${item.kilometro}</p>
+                <p class="text-sm text-gray-700"><strong>Importancia:</strong> ${item.tipoIncidente?.importancia || "N/A"}</p>
+                <p class="text-sm text-gray-700"><strong>Comentarios:</strong> ${item.comentarios}</p>
+                <p class="text-xs text-gray-500 mt-2"><strong>Fecha:</strong> ${item.timestamp}</p>
+            </div>
+        `).join("");
+    } else {
+      incidentesHtml = `<p class="text-gray-600">No se encontraron incidentes.</p>`;
+    }
+
+    // Verificar si hay intersecciones y mostrarlas
+    if (Array.isArray(datos.intersecciones) && datos.intersecciones.length > 0) {
+      interseccionesHtml = datos.intersecciones.map(i => `
+            <div class="border p-4 rounded-lg shadow bg-gray-50">
+                <p class="text-lg font-semibold text-purple-600">${i.nombre}</p>
+                <p class="text-sm text-gray-700"><strong>Origen:</strong> ${i.origen}</p>
+                <p class="text-sm text-gray-700"><strong>Destino:</strong> ${i.destino}</p>
+                <p class="text-sm text-gray-700"><strong>Distancia:</strong> ${i.distancia} km</p>
+            </div>
+        `).join("");
+    } else {
+      interseccionesHtml = `<p class="text-gray-600">No se encontraron intersecciones.</p>`;
+    }
+
+    // Mostrar resultados en el contenedor
+    document.getElementById("resultadoIncidentes").innerHTML = `
+        <h3 class="text-lg font-bold mt-4 text-gray-800">Incidentes</h3>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">${incidentesHtml}</div>
+        <h3 class="text-lg font-bold mt-4 text-gray-800">Intersecciones</h3>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">${interseccionesHtml}</div>
+    `;
+  }
+
+  function mostrarReporte(datos) {
+    let html = `
+                <table class="w-full border-collapse border border-gray-300 mt-4">
+                    <thead>
+                        <tr class="bg-gray-200">
+                            <th class="border border-gray-300 p-2">Tramo</th>
+                            <th class="border border-gray-300 p-2">Total Gravedad</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${datos.map(d => `
+                            <tr>
+                                <td class="border border-gray-300 p-2">${d.tramo}</td>
+                                <td class="border border-gray-300 p-2">${d.totalGravedad}</td>
+                            </tr>
+                        `).join("")}
+                    </tbody>
+                </table>
+            `;
+    document.getElementById("resultadoReporte").innerHTML = html;
+  }
+  async function registrarIncidente() {
+    const nombreRuta = document.getElementById("ruta").value;
+    const kilometro = document.getElementById("kilometro").value;
+    const nombreTipoIncidente = document.getElementById("tipoIncidente").value;
+    const comentarios = document.getElementById("comentarios").value;
+
+    const data = { nombreRuta, kilometro: parseInt(kilometro), nombreTipoIncidente, comentarios };
+
+    try {
+      const response = await fetch(`${API_URL}/registrar`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+      });
+      const result = await response.json();
+      alert(response.ok ? "Incidente registrado" : `Error: ${result.error}`);
+    } catch (error) {
+      console.error("Error:", error);
+    }
+  }
+</script>
+</body>
+</html>
