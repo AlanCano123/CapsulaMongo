@@ -24,15 +24,18 @@ public class IncidenteService {
     private final RutaRepository rutaRepository;
     private final TipoIncidenteRepository tipoIncidenteRepository;
     private final RedisTemplate<String, Object> redisTemplate;
+    private final Map<String, Integer> rutaConsultaContador = new ConcurrentHashMap<>();
 
-    public IncidenteService(IncidenteRepository incidenteRepository, RutaRepository rutaRepository, TipoIncidenteRepository tipoIncidenteRepository,RedisTemplate<String, Object> redisTemplate) {
+    private static final int UMBRAL_CONSULTAS = 5;
+    private static final Duration CACHE_TIEMPO_NORMAL = Duration.ofHours(1);
+    private static final Duration CACHE_TIEMPO_INTENSO = Duration.ofMinutes(10);
+
+    public IncidenteService(IncidenteRepository incidenteRepository, RutaRepository rutaRepository, TipoIncidenteRepository tipoIncidenteRepository, RedisTemplate<String, Object> redisTemplate) {
         this.incidenteRepository = incidenteRepository;
         this.rutaRepository = rutaRepository;
         this.tipoIncidenteRepository = tipoIncidenteRepository;
         this.redisTemplate = redisTemplate;
     }
-    private final Map<String, Integer> rutaConsultaContador = new ConcurrentHashMap<>();
-
 
     public Incidente registrarIncidente(String nombreRuta, int kilometro, String nombreTipoIncidente, String comentarios) {
         Optional<Ruta> rutaOpt = rutaRepository.findByNombre(nombreRuta);
@@ -53,10 +56,9 @@ public class IncidenteService {
         incidente.setTipoIncidente(tipoOpt.get());
         incidente.setTimestamp(LocalDateTime.now());
         incidente.setComentarios(comentarios);
+
         // Eliminar cache de incidentes y reportes de esta ruta
-        redisTemplate.delete("contador:" + nombreRuta);
-        redisTemplate.delete("incidentes:" + nombreRuta + ":" + (kilometro / 100) * 100);
-        redisTemplate.delete("reporte:" + nombreRuta);
+        invalidarCache(nombreRuta);
         return incidenteRepository.save(incidente);
     }
 
@@ -65,11 +67,11 @@ public class IncidenteService {
         if(incidenteRepository.existsById(incidenteId)) {
             throw new IllegalArgumentException("Ya se encuentra eliminado");
         }
+
         redisTemplate.delete("contador:" + incidenteId);
         redisTemplate.delete("incidentes:" + incidenteId);
         redisTemplate.delete("reporte:" + incidenteId);
     }
-
 
     public IncidenteResponse obtenerIncidentesPorRuta(String nombreRuta, int kilometroInicio) {
         String cacheKey = "incidentes:" + nombreRuta + ":" + kilometroInicio;
@@ -81,8 +83,8 @@ public class IncidenteService {
             consultasPrevias = 0;
         }
 
-        if (consultasPrevias >= 5) {
-            redisTemplate.expire(cacheKey, Duration.ofMinutes(10));
+        if (consultasPrevias >= UMBRAL_CONSULTAS) {
+            redisTemplate.expire(cacheKey, CACHE_TIEMPO_INTENSO);
         }
 
         // Intentar obtener incidentes desde caché
@@ -91,17 +93,12 @@ public class IncidenteService {
             return cacheado;
         }
 
-        // Obtener la ruta de MongoDB
         Ruta ruta = rutaRepository.findByNombre(nombreRuta)
                 .orElseThrow(() -> new RuntimeException("Ruta no encontrada: " + nombreRuta));
 
-        // Definir el rango de kilómetros
         int kmFin = kilometroInicio + 100;
-
-        // Consultar incidentes en MongoDB
         List<Incidente> incidentes = incidenteRepository.buscarIncidentesPorRuta(ruta.getId(), kilometroInicio, kmFin);
 
-        // Obtener intersecciones
         List<RutaResponse> interseccionesPersonalizadas = ruta.getIntersecciones().stream()
                 .map(interseccion -> new RutaResponse(
                         interseccion.getNombre(),
@@ -113,10 +110,7 @@ public class IncidenteService {
 
         IncidenteResponse response = new IncidenteResponse(incidentes, interseccionesPersonalizadas);
 
-        // Guardar en caché
-        redisTemplate.opsForValue().set(cacheKey, response, Duration.ofHours(1));
-
-        // Incrementar contador de consultas en Redis
+        redisTemplate.opsForValue().set(cacheKey, response, CACHE_TIEMPO_NORMAL);
         redisTemplate.opsForValue().increment(contadorKey);
 
         return response;
@@ -126,40 +120,41 @@ public class IncidenteService {
         String cacheKey = "reporte:" + nombreRuta;
         Integer consultasPrevias = rutaConsultaContador.getOrDefault(nombreRuta, 0);
 
-        if (consultasPrevias >= 5) {
-            redisTemplate.expire(cacheKey, Duration.ofMinutes(10));
+        if (consultasPrevias >= UMBRAL_CONSULTAS) {
+            redisTemplate.expire(cacheKey, CACHE_TIEMPO_INTENSO);
         }
 
-        // Intentar obtener de caché
         List<ReporteResponse> cacheado = (List<ReporteResponse>) redisTemplate.opsForValue().get(cacheKey);
         if (cacheado != null) {
             return cacheado;
         }
 
-        // Obtener datos de MongoDB
         Optional<Ruta> rutaOpt = rutaRepository.findByNombre(nombreRuta);
         if (rutaOpt.isEmpty()) {
             throw new RuntimeException("Ruta no encontrada");
         }
 
         List<Map<String, Object>> resultado = incidenteRepository.obtenerReporteRuta(rutaOpt.get().getId());
-
         List<ReporteResponse> reporte = resultado.stream()
                 .map(r -> new ReporteResponse(
                         ((Number) r.get("_id")).intValue(),
                         ((Number) r.get("totalGravedad")).intValue()))
                 .collect(Collectors.toList());
 
-        // Guardar en caché por 1 hora si no se ha superado el límite
-        redisTemplate.opsForValue().set(cacheKey, reporte, Duration.ofHours(1));
-
-        // Incrementar contador de consultas
+        redisTemplate.opsForValue().set(cacheKey, reporte, CACHE_TIEMPO_NORMAL);
         rutaConsultaContador.put(nombreRuta, consultasPrevias + 1);
 
         return reporte;
- }
+    }
+
+    public void invalidarCache(String rutaId) {
+        redisTemplate.delete("contador:" + rutaId);
+        redisTemplate.delete("incidentes:" + rutaId);
+        redisTemplate.delete("reporte:" + rutaId);
+        rutaConsultaContador.remove(rutaId);
+    }
+
     public List<Incidente> obtenerIncidentes() {
-         List<Incidente> lista = incidenteRepository.findAll();
-         return lista;
+        return incidenteRepository.findAll();
     }
 }

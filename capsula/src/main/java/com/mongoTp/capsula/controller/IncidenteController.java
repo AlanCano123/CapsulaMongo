@@ -58,7 +58,7 @@ public class IncidenteController {
 
     @GetMapping("/obtenerTodosAccidentes")
     public List<Incidente> obtenerTodosIncidentes(){
-       return incidenteService.obtenerIncidentes();
+        return incidenteService.obtenerIncidentes();
     }
 
 }
